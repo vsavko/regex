@@ -9,6 +9,8 @@ Regular expressions are using the following syntax:
 '*' - kleene star
 '+' - OR
 '()' - brackets
+'\e' - for empty string
+'\n' - for null string
 
 The program is not finished yet.
 
