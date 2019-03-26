@@ -10,7 +10,7 @@ Regular expressions are using the following syntax:
 '+' - OR
 '()' - brackets
 '\e' - for empty string
-'\n' - for null string
+'\n' - for null string.
 
 The program is not finished yet.
 
