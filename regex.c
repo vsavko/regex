@@ -388,15 +388,19 @@ int * simplify_e_transitions(int symbols_num2, int symbols_num, nfa_table_record
 	return delete_states;
 }
 
-void ECLOSE(int nfa_state, int symbols_num, int states_in[], nfa_table_record * nfa_table[][symbols_num+2]){
+void ECLOSE(int nfa_state, int symbols_num, int states_in[][2], nfa_table_record * nfa_table[][symbols_num+2], int closed_states[]){
 	int i, transition;
 	
-	states_in[nfa_state] = 1; //ECLOSE always transitions to itself
+	states_in[nfa_state][0] = 1; //ECLOSE always transitions to itself
 	
 	for (i = 0; i < nfa_table[nfa_state][1] -> num_of_transitions; i++){
 		transition = *(nfa_table[nfa_state][1] -> transitions + i);
-			states_in[transition] = 1;
-		ECLOSE(transition, symbols_num, states_in, nfa_table);
+			states_in[transition][0] = 1;
+			states_in[transition][1] = states_in[nfa_state][1];
+		if  (closed_states[transition] == 0){
+			closed_states[transition] = 1;
+			ECLOSE(transition, symbols_num, states_in, nfa_table, closed_states);
+		}
 	}
 }
 
@@ -409,20 +413,24 @@ int found_lines;
 char **line_text;
 } text_output;
 
-void set_table(int table[], int length){
+void set_table(int table[][2], int length){
 	int i;
-	table[1] = TRUE; //initial state always true as we cycle among the text
-	for (i=2; i<length; i++){
-		table[i] = FALSE;
+	table[0][0] = TRUE; //initial state always true as we cycle among the text
+	table[0][0] = -1;
+	for (i=1; i<length; i++){
+		table[i][0] = FALSE;
+		table[i][1] = -1;
 	}
 }
 
 //prints the line and char number
 text_output search_text(FILE * search_text_input, int symbols_num, int symbols_num2, nfa_table_record * nfa_table[][symbols_num+2]){
-	int states_in_A[symbols_num2], states_in_B[symbols_num2], symbol_col, begin_char = 0, NFA_empty = TRUE, found_lines = 0, new_found_line = FALSE ;
-	int i,j, symb_count, char_nr = 0, line_nr = 0, found_cases = 0;
+	int states_in_A[symbols_num2][2], states_in_B[symbols_num2][2], symbol_col, NFA_empty = TRUE, found_lines = 0, new_found_line = FALSE ;
+	int i,j, symb_count, char_nr = 0, line_nr = 0, found_cases = 0, closed_states[symbols_num2];
 	char text;
 	text_output output;
+	
+	// states_in_A[symbols_num2][2] - current states that NFA is in, x-dimention 1/0 if is in state, y-dim the number of begin_char from text line
 		
 	output.line_num = malloc(sizeof(int));
 	output.char_num_begin = malloc(sizeof(int));
@@ -434,7 +442,11 @@ text_output search_text(FILE * search_text_input, int symbols_num, int symbols_n
 	*(output.line_num) = -1;
 	
 	set_table(states_in_A, symbols_num2);
-	ECLOSE(0, symbols_num, states_in_A, nfa_table);	
+	
+	for (i = 0; i < symbols_num2; i++)
+		closed_states[symbols_num2] = 0;
+	
+	ECLOSE(0, symbols_num, states_in_A, nfa_table, closed_states);	
 	
 	while ((text = getc(search_text_input)) != '\0' && text != EOF){ 	
 		
@@ -461,54 +473,59 @@ text_output search_text(FILE * search_text_input, int symbols_num, int symbols_n
 		for (i = 2; i < symbols_num+2; i++){
 			if (nfa_table[0][i] -> state_name == text){
 				symbol_col = i;
-				if (NFA_empty == TRUE ){
-					begin_char = char_nr;
-					NFA_empty = FALSE;
+				
+				if (nfa_table[0][symbol_col] -> num_of_transitions > 0 ){
+					states_in_A[0][1] = char_nr;
 				}
+				
 				break;
 			}
 		}
 		
 		if (symbol_col >= 2){
 			// find transitions from current states on input symbol 
+			// symbols_num2 - rows 
 			for (i = 0; i < symbols_num2 ; i++){
-				if (states_in_A[i] == TRUE){
+				if (states_in_A[i][0] == TRUE){
 					for (j = 0 ; j < nfa_table[i][symbol_col] -> num_of_transitions; j++){
-						states_in_B [ *(nfa_table[i][symbol_col] ->transitions + j) ] = TRUE;
+						states_in_B [ *(nfa_table[i][symbol_col] ->transitions + j) ][0] = TRUE;
+						if (states_in_B [ *(nfa_table[i][symbol_col] ->transitions + j) ][1] == -1);
+							states_in_B [ *(nfa_table[i][symbol_col] ->transitions + j) ][1] = states_in_A[i][1];
 					}
-					ECLOSE(0, symbols_num, states_in_B, nfa_table);
+					for (i = 0; i < symbols_num2; i++)
+						closed_states[symbols_num2] = 0;
+					ECLOSE(0, symbols_num, states_in_B, nfa_table, closed_states);
 				}
 			}
 			//check if we ended up in a final state
 			for (i = 1; i < symbols_num2 ;i++){
 
-				if (states_in_B[i] == 1 && *(nfa_table[i][0]->transitions) == 1){
-					if (found_cases == 0 || *(output.char_num_begin + found_cases-1) != begin_char || *(output.line_num + found_cases-1) != line_nr){ //if we are on the same line only print not connected cases
-						++found_cases;
-						output.line_num = realloc(output.line_num, sizeof(int)*(found_cases+1) );
-						output.char_num_end = realloc(output.char_num_end, sizeof(int)*(found_cases+1) );
-						output.char_num_begin = realloc(output.char_num_begin, sizeof(int)*(found_cases+1) );
-						*(output.line_num + found_cases-1) = line_nr;
-						*(output.char_num_end + found_cases-1) = char_nr;
-						*(output.char_num_begin + found_cases-1) = begin_char;
-						new_found_line = TRUE;
-					}
-					else {
-						*(output.char_num_end + found_cases-1) = char_nr;
-					}
+				if (states_in_B[i][0] == 1 && *(nfa_table[i][0]->transitions) == 1){
+					++found_cases;
+					output.line_num = realloc(output.line_num, sizeof(int)*(found_cases+1) );
+					output.char_num_end = realloc(output.char_num_end, sizeof(int)*(found_cases+1) );
+					output.char_num_begin = realloc(output.char_num_begin, sizeof(int)*(found_cases+1) );
+					*(output.line_num + found_cases-1) = line_nr;
+					*(output.char_num_end + found_cases-1) = char_nr;
+					*(output.char_num_begin + found_cases-1) = states_in_B[i][1];
+					new_found_line = TRUE;
 				}
 			}
 			//copy B to A and delete B
-			states_in_A[0] = TRUE;
+			states_in_A[0][0] = TRUE;
 			for (i = 1; i < symbols_num2 ;i++){
-				states_in_A[i] = states_in_B[i];
-				states_in_B[i] = FALSE;
+				states_in_A[i][0] = states_in_B[i][0];
+				states_in_A[i][1] = states_in_B[i][1];
+				states_in_B[i][0] = FALSE;
+				states_in_B[i][1] = -1;
 			}
 		}
 		else{
 			for (i = 1; i < symbols_num2; i++){
-				states_in_A[i] = FALSE;
-				states_in_B[i] = FALSE;
+				states_in_A[i][0] = FALSE;
+				states_in_A[i][1] = -1;
+				states_in_B[i][0] = FALSE;
+				states_in_A[i][1] = -1;
 				NFA_empty = TRUE;
 			}	
 		}
@@ -645,6 +662,7 @@ void main(int argc, char * argv[]){
 	}
 
 	output = search_text(search_text_input, symbols_num,  symbols_num2, table);
+	
 	fclose(search_text_input);
 
 	if (output.found == 0)
