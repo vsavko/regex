@@ -13,6 +13,15 @@ int num_of_transitions;
 int * transitions;
 } nfa_table_record;
 
+typedef struct{
+int found;
+int *line_num;
+int *char_num_begin;
+int *char_num_end;
+int found_lines;
+char **line_text;
+} text_output;
+
 void nfa_record_add(nfa_table_record * record, int transition_to_state){
 	if (record -> num_of_transitions == 0){
 		(record -> transitions) = malloc(sizeof(int));
@@ -111,7 +120,6 @@ int search_symbol_col (char letter, char table[], int num_symbols){
 
 int reg_to_nfa (int symbols_num2,int count_symbols, nfa_table_record  * table[][count_symbols+2], char * regex){
 	int len, i;
-
 	int state_to_add_transition; // to which row of the table (state) we will add transitions when we see a letter from sigma
 	int state_start_tab[symbols_num2]; //state to return to when we see + or * after brackets
 	int state_in = 1; //current number of row in state_start_tab table
@@ -392,31 +400,22 @@ void ECLOSE(int nfa_state, int symbols_num, int states_in[][2], nfa_table_record
 	int i, transition;
 	
 	states_in[nfa_state][0] = 1; //ECLOSE always transitions to itself
-	
+
 	for (i = 0; i < nfa_table[nfa_state][1] -> num_of_transitions; i++){
 		transition = *(nfa_table[nfa_state][1] -> transitions + i);
 			states_in[transition][0] = 1;
 			states_in[transition][1] = states_in[nfa_state][1];
-		if  (closed_states[transition] == 0){
+		if (closed_states[transition] == 0){
 			closed_states[transition] = 1;
 			ECLOSE(transition, symbols_num, states_in, nfa_table, closed_states);
 		}
 	}
 }
 
-typedef struct{
-int found;
-int *line_num;
-int *char_num_begin;
-int *char_num_end;
-int found_lines;
-char **line_text;
-} text_output;
-
 void set_table(int table[][2], int length){
 	int i;
 	table[0][0] = TRUE; //initial state always true as we cycle among the text
-	table[0][0] = -1;
+	table[0][1] = -1;
 	for (i=1; i<length; i++){
 		table[i][0] = FALSE;
 		table[i][1] = -1;
@@ -426,7 +425,7 @@ void set_table(int table[][2], int length){
 //prints the line and char number
 text_output search_text(FILE * search_text_input, int symbols_num, int symbols_num2, nfa_table_record * nfa_table[][symbols_num+2]){
 	int states_in_A[symbols_num2][2], states_in_B[symbols_num2][2], symbol_col, NFA_empty = TRUE, found_lines = 0, new_found_line = FALSE ;
-	int i,j, symb_count, char_nr = 0, line_nr = 0, found_cases = 0, closed_states[symbols_num2];
+	int i,j,k, symb_count, char_nr = 0, line_nr = 0, found_cases = 0, closed_states[symbols_num2], transition;
 	char text;
 	text_output output;
 	
@@ -442,64 +441,62 @@ text_output search_text(FILE * search_text_input, int symbols_num, int symbols_n
 	*(output.line_num) = -1;
 	
 	set_table(states_in_A, symbols_num2);
-	
-	for (i = 0; i < symbols_num2; i++)
-		closed_states[symbols_num2] = 0;
-	
-	ECLOSE(0, symbols_num, states_in_A, nfa_table, closed_states);	
+	set_table(states_in_B, symbols_num2);
 	
 	while ((text = getc(search_text_input)) != '\0' && text != EOF){ 	
-		
+			
 		if (text == '\n'){
 			++line_nr;
 			if (new_found_line == TRUE){
 				*(output.line_text[found_lines] + char_nr) = '\0';
 				++found_lines;
 				if (found_lines > 99)
-					realloc(output.line_text, sizeof(char*)*(found_lines+1));
+					output.line_text = realloc(output.line_text, sizeof(char*)*(found_lines+1));
 				output.line_text[found_lines] = malloc(100 * sizeof(char));
-				
 				new_found_line = FALSE;
 			}
 			char_nr = 0;
 			continue;
 		}
 		
-		*(output.line_text[found_lines] + char_nr) = text;
-		
+		*(output.line_text[found_lines] + char_nr) = text;	
 		symbol_col = 0;
 			
 		//find symbol column
 		for (i = 2; i < symbols_num+2; i++){
 			if (nfa_table[0][i] -> state_name == text){
 				symbol_col = i;
-				
-				if (nfa_table[0][symbol_col] -> num_of_transitions > 0 ){
-					states_in_A[0][1] = char_nr;
-				}
-				
+				states_in_A[0][1] = char_nr;
 				break;
 			}
 		}
 		
+		for (i = 0; i < symbols_num2; i++)
+			closed_states[i] = 0;
+	
+		ECLOSE(0, symbols_num, states_in_A, nfa_table, closed_states);	
+		
 		if (symbol_col >= 2){
 			// find transitions from current states on input symbol 
 			// symbols_num2 - rows 
-			for (i = 0; i < symbols_num2 ; i++){
-				if (states_in_A[i][0] == TRUE){
+			for (k = 0; k < symbols_num2; k++)
+				closed_states[k] = 0;
+
+			for (i = 0; i < symbols_num2 ; i++){ //search through states of NFA we are at and add transitions to new ones on current aplhabet symball 
+				if (states_in_A[i][0] == TRUE){					
 					for (j = 0 ; j < nfa_table[i][symbol_col] -> num_of_transitions; j++){
-						states_in_B [ *(nfa_table[i][symbol_col] ->transitions + j) ][0] = TRUE;
-						if (states_in_B [ *(nfa_table[i][symbol_col] ->transitions + j) ][1] == -1);
-							states_in_B [ *(nfa_table[i][symbol_col] ->transitions + j) ][1] = states_in_A[i][1];
+						transition = *(nfa_table[i][symbol_col] ->transitions + j);
+						states_in_B [transition][0] = TRUE;
+						if (states_in_B [transition][1] == -1)
+							states_in_B [transition][1] = states_in_A[i][1];
+						
+						ECLOSE(transition, symbols_num, states_in_B, nfa_table, closed_states);
 					}
-					for (i = 0; i < symbols_num2; i++)
-						closed_states[symbols_num2] = 0;
-					ECLOSE(0, symbols_num, states_in_B, nfa_table, closed_states);
 				}
 			}
+						
 			//check if we ended up in a final state
 			for (i = 1; i < symbols_num2 ;i++){
-
 				if (states_in_B[i][0] == 1 && *(nfa_table[i][0]->transitions) == 1){
 					++found_cases;
 					output.line_num = realloc(output.line_num, sizeof(int)*(found_cases+1) );
@@ -530,8 +527,9 @@ text_output search_text(FILE * search_text_input, int symbols_num, int symbols_n
 			}	
 		}
 		++char_nr;
-		if (char_nr > 99)
-			realloc(output.line_text[found_lines], sizeof(char)*(char_nr+1));
+		if (char_nr > 99){
+			output.line_text[found_lines] = realloc(output.line_text[found_lines], sizeof(char)*(char_nr+1));
+		}
 	}
 	
 	if (new_found_line == TRUE){
@@ -546,13 +544,15 @@ text_output search_text(FILE * search_text_input, int symbols_num, int symbols_n
 
 void main(int argc, char * argv[]){
 	int i, j, k, argv_char_count = 0;
-	char * regex ="a+b";
+	char * regex, * str;
 	int argv_end = 0, len, symbols_num, symbols_num2, free_state;
 	int * delete_states;
 	int dfa_states, previos_line;
+	int line, char_beg, char_end;
 	FILE * search_text_input;
 	text_output output;
 	
+	//check enetered parameters
 	if (argc > 1){
 		if (*(argv[1]) != '"'){
 			printf("regular expression must begin by quotes - \\\"");
@@ -615,7 +615,7 @@ void main(int argc, char * argv[]){
 	
 	nfa_table_record * table[symbols_num2][symbols_num+2];
 
-	printf("REGEX: \"%s\", num of char: %d\n",regex,symbols_num2-2);
+	printf("REGEX: \"%s\", num of char: %d\n",regex,symbols_num);
 	
 	for (i= 0; i < symbols_num2;  i++){
 		for (j = 0; j<symbols_num+2; j++){
@@ -630,16 +630,14 @@ void main(int argc, char * argv[]){
 	delete_states = simplify_e_transitions(symbols_num2, symbols_num, table);
 	printf("NFA:\n");
 	
+	//print NFA table
 	for (i= 0; i < free_state; i++){
-		
 		if (*(delete_states + i) == 0)
 			continue;
-		
 		if ( i > 0 )
 			printf("%d\t",i);
 		else
 			printf("\t",i);
-		
 		if (i == 0){
 			for (j = 0; j < symbols_num + 2 ; j++){
 				printf("%c\t",table[0][j] -> state_name);
@@ -647,9 +645,7 @@ void main(int argc, char * argv[]){
 			printf("\n");
 		printf("%d\t",i);
 		}
-		
 		for (j = 0; j < symbols_num + 2 ; j++){
-			
 			if(table[i][j] -> num_of_transitions > 0){
 				for (k = 0 ; k < table[i][j] -> num_of_transitions; k++) 
 					printf("%d,", *(table[i][j] -> transitions + k) );
@@ -664,20 +660,44 @@ void main(int argc, char * argv[]){
 	output = search_text(search_text_input, symbols_num,  symbols_num2, table);
 	
 	fclose(search_text_input);
-
+	//print out search results
 	if (output.found == 0)
-		printf("No matches found!");
+		printf("\nNo matches found!");
 	else{
 		previos_line = -1;
-		for(i = 0, j = 0 ; i < output.found; i++){
+		printf("output.found %d\n",output.found);
+		str = malloc(sizeof(char)*100*output.found);
+		for(i = 0, j = 0; i < output.found; i++){
+			line = *(output.line_num + i);
+			char_beg = *(output.char_num_begin + i);
+			char_end = *(output.char_num_end + i);
+			
 			if (previos_line != *(output.line_num + i)) {
+				printf("\n\nLine %d:\n",line);
 				previos_line = *(output.line_num + i);
-				printf("\n%s\n",output.line_text[j++]);
-				
+				len = strlen(output.line_text[j]);
+				printf("%s\n",output.line_text[j++]);
+				k = 0;
 			}
-				
-			printf("Line %d, char_nr begin: %d end: %d\n",*(output.line_num + i), *(output.char_num_begin + i), *(output.char_num_end + i));
+			
+			for (; k < len; k++){
+				if (k == char_beg) {
+					printf("^");
+				}
+				else if(k == char_end){
+					printf("^");
+					++k;
+					break;
+				}
+				else if(k > char_beg && k < char_end)
+					printf("-");
+				else
+					printf(" ");
+			}
+			
 		}
+
+		
 	}
 
 	for (i= 0; i < symbols_num2;  i++){
