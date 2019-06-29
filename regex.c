@@ -542,14 +542,36 @@ text_output search_text(FILE * search_text_input, int symbols_num, int symbols_n
 	return output;
 }
 
+void print_lines(char * str, char * str2, int len, int line, int window_size){
+	int char_left, x ,y, stop = FALSE;
+	
+	printf("\nLine %d:\n",line);				
+	for (x = 0; x < len; x += window_size-1){
+		char_left = (len - x < window_size - 1) ? len - x : window_size-1;
+		for (y = 0; y < char_left; y++){
+			printf("%c",*(str+x+y));
+		}
+		printf("\n");
+		for (y = 0; y < char_left && stop == FALSE; y++){
+			printf("%c",*(str2+x+y));
+			if (*(str2+x+y) == '\0'){
+				stop = TRUE;
+				printf("\n");
+			}
+		}
+		if (stop == FALSE) printf("\n");
+	}
+	
+}
+
 void main(int argc, char * argv[]){
-	int i, j, k, argv_char_count = 0;
-	char * regex, * str;
+	int i, j, k, y, x, argv_char_count = 0, window_size = 100, char_left;
+	char *regex, *str, *str2 ;
 	int argv_end = 0, len, symbols_num, symbols_num2, free_state;
-	int * delete_states;
+	int *delete_states;
 	int dfa_states, previos_line;
 	int line, char_beg, char_end;
-	FILE * search_text_input;
+	FILE *search_text_input;
 	text_output output;
 	
 	//check enetered parameters
@@ -608,6 +630,9 @@ void main(int argc, char * argv[]){
 		   }
 	}
 	
+	if (argc >=4 && atoi(argv[3]) > 0 )
+		window_size = atoi(argv[3]);
+	
 	if ( check_syntax(regex) == FALSE) return;
 	regex = RemoveExccessBrackets(regex);
 	symbols_num = count_symbols(regex);
@@ -665,39 +690,53 @@ void main(int argc, char * argv[]){
 		printf("\nNo matches found!");
 	else{
 		previos_line = -1;
-		printf("output.found %d\n",output.found);
+		printf("Output found: %d\n",output.found);
 		str = malloc(sizeof(char)*100*output.found);
 		for(i = 0, j = 0; i < output.found; i++){
+			
 			line = *(output.line_num + i);
 			char_beg = *(output.char_num_begin + i);
 			char_end = *(output.char_num_end + i);
 			
+			
 			if (previos_line != *(output.line_num + i)) {
-				printf("\n\nLine %d:\n",line);
+				
+				if (previos_line > -1){		
+					print_lines(str, str2, len, line-1, window_size);
+				}
+				
 				previos_line = *(output.line_num + i);
 				len = strlen(output.line_text[j]);
-				printf("%s\n",output.line_text[j++]);
+				str = malloc(sizeof(char)*(len+1));
+				str2 = malloc(sizeof(char)*(len+1));
+				sprintf(str,"%s",output.line_text[j++]);
 				k = 0;
 			}
-			
+
 			for (; k < len; k++){
 				if (k == char_beg) {
-					printf("^");
+					*(str2+k) = '^';
+					if(k == char_end){
+						++k;
+						break;
+					}
 				}
 				else if(k == char_end){
-					printf("^");
+					*(str2+k) = '^';
 					++k;
 					break;
 				}
-				else if(k > char_beg && k < char_end)
-					printf("-");
-				else
-					printf(" ");
+				else if(k > char_beg && k < char_end){
+					*(str2+k) = '-';
+				}
+				else{
+					*(str2+k) = ' ';
+				}
 			}
+			*(str2+k) = '\0';
 			
 		}
-
-		
+		print_lines(str, str2, len, line, window_size);
 	}
 
 	for (i= 0; i < symbols_num2;  i++){
