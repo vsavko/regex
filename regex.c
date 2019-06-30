@@ -303,18 +303,24 @@ char * RemoveExccessBrackets(char * argv)
 }
 
 void find_end_states(int symbols_num2, int symbols_num, nfa_table_record * table[symbols_num2][symbols_num+2], int free_states){ //symbols2 - states, symbols_num -alphabet
-	int i,j,k,state,num_of_transitions, end_state;
+	int i,j,k,state,num_of_transitions, end_state,has_bigger_e_trans;
 	int * transitions;
 	
 	for (i=1; i<free_states; i++){
 		end_state = TRUE;
+		has_bigger_e_trans = FALSE;
 		for (j=1; j<symbols_num+2 && end_state == TRUE; j++){
 			if ( (num_of_transitions = table[i][j]->num_of_transitions) == 0){
 				continue;
 			}
 			transitions = table[i][j]-> transitions;
+			
 			for (k=0; k < num_of_transitions; k++){
-				if ( *(transitions+k) != i){ //if current state has transitions to other states its not final
+					//if has e-transitions to states of bigger order then this one
+				if (j ==1 && *(transitions+k) > i)
+					has_bigger_e_trans = TRUE;
+				
+				if ( (j>2 && *(transitions+k) != i) || has_bigger_e_trans == TRUE){ //if current state has transitions to other states its not final
 					end_state = FALSE;
 					break;
 				}
@@ -648,10 +654,25 @@ void main(int argc, char * argv[]){
 			table[i][j] -> num_of_transitions = 0;
 		}
 	}
-
+	
 	free_state = reg_to_nfa(symbols_num2, symbols_num, table, regex);	
 	find_end_states(symbols_num2, symbols_num, table, free_state);
 	printf("\n");
+	
+	for (i= 0; i < free_state; i++){
+		printf("%d\t",i);
+		for (j = 0; j < symbols_num + 2 ; j++){
+			if(table[i][j] -> num_of_transitions > 0){
+				for (k = 0 ; k < table[i][j] -> num_of_transitions; k++) 
+					printf("%d,", *(table[i][j] -> transitions + k) );
+				printf(" \t" );
+			}
+			else
+				printf("n\t" );
+		}
+		printf("\n");
+	}
+	
 	delete_states = simplify_e_transitions(symbols_num2, symbols_num, table);
 	printf("NFA:\n");
 	
