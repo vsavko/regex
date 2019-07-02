@@ -5,6 +5,8 @@
 
 #define TRUE 1
 #define FALSE 0
+#define TEST printf("test");
+#define TEST2 printf("test2\n");
 
 typedef struct{
 char state_name;
@@ -68,19 +70,16 @@ int count_symbols(char * regex){
 }
 
 int count_symbols2(char * regex){
-	int len, i, count = 0;
+	int len, i, count = 2; //from 2 because we always have state Q0 and an e-transition to state Q1
 	len = strlen(regex);
-	char ascii_table[256];
-
-	for (i=0; i<256; i++){
-		ascii_table[i] = '\0';
-	}
 
 	for (i=0; i<len; i++){
 		if (regex[i] == '+' )
-			continue;
+			++count;
 		if (regex[i] == '*' )
-			count +=2;
+			continue;
+		if (regex[i] == '(' )
+			count += 2; //state_startt and state out
 		else
 			++count;
 	}
@@ -139,7 +138,7 @@ int reg_to_nfa (int symbols_num2,int count_symbols, nfa_table_record  * table[][
 	//	q3	0	n	n	n	4
 	//....
 	
-
+	printf("%d symbols_num2",symbols_num2);
 	state_start_tab[0] = 0;
 	len = strlen(regex);	
 	assign_col_to_letters(regex, count_symbols, symbols_table);
@@ -150,7 +149,12 @@ int reg_to_nfa (int symbols_num2,int count_symbols, nfa_table_record  * table[][
 	for (i = 2 ; i <= count_symbols+1; i++){
 		table[0][i] -> state_name = symbols_table[i-1];
 	}
+
+	//initialize accepting  - F stastes to zero
+	for (i=0; i<symbols_num2; i++)
+		nfa_record_add(table[i][0], 0);
 	
+
 	current_state = free_state;
 	nfa_record_add(table[0][1], current_state); //epsilon transition from initial state
 	++free_state;
@@ -158,7 +162,6 @@ int reg_to_nfa (int symbols_num2,int count_symbols, nfa_table_record  * table[][
 	//making the NFA table
 	for (i = 0; i < len; i++){	
 	
-		
 		for (x= 0; x <= free_state; x++){
 		printf("%d\t",x);
 		for (j = 0; j < count_symbols + 2 ; j++){
@@ -174,7 +177,6 @@ int reg_to_nfa (int symbols_num2,int count_symbols, nfa_table_record  * table[][
 		}
 	printf("\n");
 
-	
 		if (regex[i] == '('){
 			nfa_record_add(table[current_state][1], free_state ); 
 			current_state = free_state;
@@ -188,11 +190,11 @@ int reg_to_nfa (int symbols_num2,int count_symbols, nfa_table_record  * table[][
 				nfa_record_add(table[current_state][1], brackets_out_state[brackets_out_cur] );
 			}
 			if (state_in == 0){
-				nfa_record_add(table[current_state][0], 1 ); //final state found
+				*(table[current_state][0]->transitions) = 1 ;//final state found
 			}
 			current_state = free_state;
 			++free_state;
-			nfa_record_add(table[state_start_tab[state_in]][1], current_state );
+			nfa_record_add(table[state_start_tab[state_in]][1], current_state ); 
 			
 		}
 		else if (regex[i] == '*'){
@@ -222,9 +224,26 @@ int reg_to_nfa (int symbols_num2,int count_symbols, nfa_table_record  * table[][
 		free_state++;
 		}	
 		
-		printf("%c, current_state %d free_state %d \n",regex[i], current_state, free_state );
+		printf("%c, current_state %d free_state %d  symbols_num2%d\n",regex[i], current_state, free_state, symbols_num2 );
 	}
-	nfa_record_add(table[current_state][0], 1 );
+	
+	*(table[current_state][0]->transitions) = 1 ;//final state 
+
+
+	for (x = 0; x <= free_state; x++){
+		printf("%d\t",x);
+		for (j = 0; j < count_symbols + 2 ; j++){
+			if(table[x][j] -> num_of_transitions > 0){
+				for (k = 0 ; k < table[x][j] -> num_of_transitions; k++) 
+					printf("%d,", *(table[x][j] -> transitions + k) );
+				printf(" \t" );
+			}
+			else
+				printf("n\t" );
+		}
+		printf("\n");
+		}
+	printf("\n");
 
 	printf("\n");
 	return free_state;
@@ -334,7 +353,7 @@ char * RemoveExccessBrackets(char * argv)
 	return temp;
 }
 
-void find_end_states(int symbols_num2, int symbols_num, nfa_table_record * table[symbols_num2][symbols_num+2], int free_states){ //symbols2 - states, symbols_num -alphabet
+/*void find_end_states(int symbols_num2, int symbols_num, nfa_table_record * table[symbols_num2][symbols_num+2], int free_states){ //symbols2 - states, symbols_num -alphabet
 	int i,j,k,state,num_of_transitions = 0, end_state,has_bigger_e_trans;
 	int * transitions;
 	
@@ -370,7 +389,7 @@ void find_end_states(int symbols_num2, int symbols_num, nfa_table_record * table
 		skip:
 		;
 	}
-}
+}*/
 
 int find_state(nfa_table_record * record, int state){
 	int i;
@@ -701,7 +720,7 @@ void main(int argc, char * argv[]){
 	}
 	
 	free_state = reg_to_nfa(symbols_num2, symbols_num, table, regex);	
-	find_end_states(symbols_num2, symbols_num, table, free_state);
+	//find_end_states(symbols_num2, symbols_num, table, free_state);
 	printf("\n");
 	
 	for (i= 0; i < free_state; i++){
