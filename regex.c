@@ -119,10 +119,10 @@ int search_symbol_col (char letter, char table[], int num_symbols){
 }
 
 int reg_to_nfa (int symbols_num2,int count_symbols, nfa_table_record  * table[][count_symbols+2], char * regex){
-	int len, i;
+	int len, i, x ,j, k;
 	int state_to_add_transition; // to which row of the table (state) we will add transitions when we see a letter from sigma
 	int state_start_tab[symbols_num2]; //state to return to when we see + or * after brackets
-	int state_in = 1; //current number of row in state_start_tab table
+	int state_in = 0; //current number of row in state_start_tab table
 	int num_tran; //number of transitions inside one cell - nfa_table_record - in the table of transitions
 	int free_state = 1; //add new state to the table
 	int current_state = 0; // state where we are currently
@@ -131,14 +131,14 @@ int reg_to_nfa (int symbols_num2,int count_symbols, nfa_table_record  * table[][
 	char symbols_table[count_symbols+1];
 	int symbol_col;
 
-	/*
-	table of the form:
-		F	e   A   B   C ... e- epsilon transition, A B C - alphabet letters
-	q1	0	1,2	n	2	n
-	q2	1	2	n	1	n
-	q3	0	n	n	n	4
-	....
-	*/
+	
+	//table of the form:
+	//	F	e   A   B   C ... e- epsilon transition, A B C - alphabet letters
+	//	q1	0	1,2	n	2	n
+	//	q2	1	2	n	1	n
+	//	q3	0	n	n	n	4
+	//....
+	
 
 	state_start_tab[0] = 0;
 	len = strlen(regex);	
@@ -150,8 +150,31 @@ int reg_to_nfa (int symbols_num2,int count_symbols, nfa_table_record  * table[][
 	for (i = 2 ; i <= count_symbols+1; i++){
 		table[0][i] -> state_name = symbols_table[i-1];
 	}
-
+	
+	current_state = free_state;
+	nfa_record_add(table[0][1], current_state); //epsilon transition from initial state
+	++free_state;
+	
+	//making the NFA table
 	for (i = 0; i < len; i++){	
+	
+		
+		for (x= 0; x <= free_state; x++){
+		printf("%d\t",x);
+		for (j = 0; j < count_symbols + 2 ; j++){
+			if(table[x][j] -> num_of_transitions > 0){
+				for (k = 0 ; k < table[x][j] -> num_of_transitions; k++) 
+					printf("%d,", *(table[x][j] -> transitions + k) );
+				printf(" \t" );
+			}
+			else
+				printf("n\t" );
+		}
+		printf("\n");
+		}
+	printf("\n");
+
+	
 		if (regex[i] == '('){
 			nfa_record_add(table[current_state][1], free_state ); 
 			current_state = free_state;
@@ -161,10 +184,16 @@ int reg_to_nfa (int symbols_num2,int count_symbols, nfa_table_record  * table[][
 			++free_state;
 		}
 		else if (regex[i] == '+'){
-			if (state_in != 1){
+			if (state_in != 0){
 				nfa_record_add(table[current_state][1], brackets_out_state[brackets_out_cur] );
 			}
-			current_state = state_start_tab[state_in];
+			if (state_in == 0){
+				nfa_record_add(table[current_state][0], 1 ); //final state found
+			}
+			current_state = free_state;
+			++free_state;
+			nfa_record_add(table[state_start_tab[state_in]][1], current_state );
+			
 		}
 		else if (regex[i] == '*'){
 			if (regex[i-1] == ')'){
@@ -177,10 +206,8 @@ int reg_to_nfa (int symbols_num2,int count_symbols, nfa_table_record  * table[][
 				++free_state;
 			}
 			else{
-				nfa_record_add(table[current_state-1][1], current_state-1 ); // epsilon transition to same state
+				nfa_record_add(table[current_state][1], current_state-1 ); // epsilon transition to same state
 				nfa_record_add(table[current_state-1][1], current_state ); // epsilon transition to next state
-				symbol_col = search_symbol_col(regex[i-1], symbols_table, count_symbols);
-				nfa_record_add(table[current_state][symbol_col+1], current_state );
 			}
 		}
 		else if (regex[i] == ')'){
@@ -194,10 +221,15 @@ int reg_to_nfa (int symbols_num2,int count_symbols, nfa_table_record  * table[][
 		current_state = free_state;
 		free_state++;
 		}	
+		
+		printf("%c, current_state %d free_state %d \n",regex[i], current_state, free_state );
 	}
-	
+	nfa_record_add(table[current_state][0], 1 );
+
+	printf("\n");
 	return free_state;
 }
+
 
 void print_mistake(char * expression, int length)
 {
@@ -303,16 +335,24 @@ char * RemoveExccessBrackets(char * argv)
 }
 
 void find_end_states(int symbols_num2, int symbols_num, nfa_table_record * table[symbols_num2][symbols_num+2], int free_states){ //symbols2 - states, symbols_num -alphabet
-	int i,j,k,state,num_of_transitions, end_state,has_bigger_e_trans;
+	int i,j,k,state,num_of_transitions = 0, end_state,has_bigger_e_trans;
 	int * transitions;
 	
+	nfa_record_add(table[0][0], 0);
+
 	for (i=1; i<free_states; i++){
 		end_state = TRUE;
 		has_bigger_e_trans = FALSE;
-		for (j=1; j<symbols_num+2 && end_state == TRUE; j++){
-			if ( (num_of_transitions = table[i][j]->num_of_transitions) == 0){
+		for (j=0; j<symbols_num+2 && end_state == TRUE; j++){
+				
+			if ( (num_of_transitions = table[i][j]->num_of_transitions) == 0 ){
 				continue;
 			}
+			
+			if ( j == 0 && num_of_transitions > 0 && *(table[i][0] ->transitions) == 1 ){ //skip double end state
+				goto skip;
+			}
+			
 			transitions = table[i][j]-> transitions;
 			
 			for (k=0; k < num_of_transitions; k++){
@@ -327,6 +367,8 @@ void find_end_states(int symbols_num2, int symbols_num, nfa_table_record * table
 			}
 		}
 		nfa_record_add(table[i][0], end_state );
+		skip:
+		;
 	}
 }
 
@@ -346,16 +388,19 @@ int * simplify_e_transitions(int symbols_num2, int symbols_num, nfa_table_record
 	int * delete_states;
 	
 	delete_states = malloc(sizeof(int)*symbols_num2);
-	
+	printf("test");
 	for (i=0; i < symbols_num2; i++)
 		delete_states[i] = 1;
 	
+	
 	for (i = 0; i < symbols_num2; i++){
 		found = 0;
-		if (table[i][1] -> num_of_transitions == 0)
+		if (table[i][1] -> num_of_transitions == 0 || *(table[i][0] ->transitions) == 1)
 			continue;
+		
 		for (j = 2; j < symbols_num+2; j++){ //find state with only epsilon transitions
-			if (table[i][j] -> num_of_transitions > 0){
+		
+			if (table[i][j] -> num_of_transitions > 0 ){
 				goto next;
 			}
 		}
@@ -672,7 +717,6 @@ void main(int argc, char * argv[]){
 		}
 		printf("\n");
 	}
-	
 	delete_states = simplify_e_transitions(symbols_num2, symbols_num, table);
 	printf("NFA:\n");
 	
@@ -704,7 +748,7 @@ void main(int argc, char * argv[]){
 	}
 
 	output = search_text(search_text_input, symbols_num,  symbols_num2, table);
-	
+
 	fclose(search_text_input);
 	//print out search results
 	if (output.found == 0)
@@ -718,14 +762,11 @@ void main(int argc, char * argv[]){
 			line = *(output.line_num + i);
 			char_beg = *(output.char_num_begin + i);
 			char_end = *(output.char_num_end + i);
-			
-			
+
 			if (previos_line != *(output.line_num + i)) {
-				
 				if (previos_line > -1){		
 					print_lines(str, str2, len, line-1, window_size);
 				}
-				
 				previos_line = *(output.line_num + i);
 				len = strlen(output.line_text[j]);
 				str = malloc(sizeof(char)*(len+1));
@@ -733,7 +774,6 @@ void main(int argc, char * argv[]){
 				sprintf(str,"%s",output.line_text[j++]);
 				k = 0;
 			}
-
 			for (; k < len; k++){
 				if (k == char_beg) {
 					*(str2+k) = '^';
@@ -755,7 +795,6 @@ void main(int argc, char * argv[]){
 				}
 			}
 			*(str2+k) = '\0';
-			
 		}
 		print_lines(str, str2, len, line, window_size);
 	}
