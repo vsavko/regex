@@ -148,7 +148,6 @@ int reg_to_nfa (int symbols_num2,int count_symbols, nfa_table_record  * table[][
 	//	q3	0	n	n	n	4
 	//....
 	
-	printf("%d symbols_num2",symbols_num2);
 	state_start_tab[0] = 0;
 	len = strlen(regex);	
 	assign_col_to_letters(regex, count_symbols, symbols_table);
@@ -688,7 +687,7 @@ void main(int argc, char * argv[]){
 	
 	nfa_table_record * table[symbols_num2][symbols_num+2];
 
-	printf("REGEX: \"%s\", num of char: %d\n",regex,symbols_num);
+	printf("REGEX: \"%s\", num of unique char: %d\n",regex,symbols_num);
 	
 	for (i= 0; i < symbols_num2;  i++){
 		for (j = 0; j<symbols_num+2; j++){
