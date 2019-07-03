@@ -811,7 +811,7 @@ void main(int argc, char * argv[]){
 			free(table[i][j]);
 		}
 	}
-	
+
 	//DONT FORGET TO FREE 
 	if (output.found > 0){
 		for (i=0; i <= output.found_lines; i++)
@@ -819,11 +819,12 @@ void main(int argc, char * argv[]){
 		free(output.line_text);
 		free(output.line_num);
 		free(output.char_num_begin);
-		free(output.char_num_end);		
+		free(output.char_num_end);	
+		free(str);
+		free(str2);		
 	}
-	
+
 	free(regex);
-	free(str);
-	free(str2);
 	free(delete_states);
+
 }
