@@ -644,8 +644,7 @@ void main(int argc, char * argv[]){
 	int line, char_beg, char_end;
 	FILE *search_text_input;
 	text_output output;
-	
-	
+
 	//check enetered parameters
 	if (argc > 1){
 		//check that regex is in quotes
