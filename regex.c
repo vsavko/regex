@@ -709,7 +709,6 @@ void main(int argc, char * argv[]){
 			  exit(EXIT_FAILURE);
 		   }
 	}
-	printf("argc %d argv_end+1 %d\n",argc,argv_end+1);
 	
 	if (argc > argv_end+2 && atoi(argv[argv_end+2]) > 1 )
 		window_size = atoi(argv[argv_end+2]);
