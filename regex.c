@@ -5,6 +5,13 @@
 
 #define TRUE 1
 #define FALSE 0
+#if defined(__linux__)
+    #define PLATFORM_NAME 1
+#else 
+	#define PLATFORM_NAME 0
+#endif
+#define KRED  "\x1B[31m"
+#define KWHT  "\x1B[37m"
 
 typedef struct{
 char state_name;
@@ -334,11 +341,11 @@ char * RemoveExccessBrackets(char * argv)
 			temp[j++] = argv[i];
 	}
 	temp[j] = '\0';
-	
-	temp = realloc(temp, j);
+		
+	temp = realloc(temp, (j+1)*sizeof(char));
 	if (j > 0)
 		check_malloc((void*)temp,__LINE__);
-	
+
 	free(new_regex);
 	free(stack);
 	return temp;
@@ -609,9 +616,28 @@ void print_lines(char * str, char * str2, int len, int line, int window_size){
 	
 }
 
+void print_lines_linux(char * str, char * str2, int len, int line, int window_size){
+	int char_left, x ,y;
+	
+	printf("\nLine %d:\n",line);				
+	for (x = 0; x < len; x += window_size-1){
+		char_left = (len - x < window_size - 1) ? len - x : window_size-1;
+		for (y = 0; y < char_left; y++){
+			if (*(str2+x+y) =='^' || *(str2+x+y) =='-'){
+				printf("%s%c",KRED,*(str+x+y));
+			}
+			else{
+				printf("%s%c", KWHT,*(str+x+y));
+			}	
+		}
+		printf("%s\n",KWHT);
+	}
+	
+}
+
 void main(int argc, char * argv[]){
 	int i, j, k, y, x, argv_char_count = 0, window_size = 100, char_left;
-	char *regex, *str, *str2 ;
+	char *regex, *str2, *temp ;
 	int argv_end = 0, len, symbols_num, symbols_num2, free_state;
 	int *delete_states;
 	int dfa_states, previos_line;
@@ -619,12 +645,15 @@ void main(int argc, char * argv[]){
 	FILE *search_text_input;
 	text_output output;
 	
+	
 	//check enetered parameters
 	if (argc > 1){
-		if (*(argv[1]) != '"'){
+		//check that regex is in quotes
+		if (*(argv[1]) != '"'){ 
 			printf("regular expression must begin by quotes - \\\"");
 			return;
 		}
+		//search quoted text for the argument with end quotes
 		for (i = 1; i <= (argc-1); i++){
 			len = strlen(argv[i]);
 			if (*(argv[i]+len-1) == '"'){
@@ -632,16 +661,21 @@ void main(int argc, char * argv[]){
 				break;
 			}	
 		}
+		//check if ending quotes are present
 		if (argv_end == 0){
 			printf("regular expression must end by quotes - \\\"");
 			return;
 		}	
+		
+		//find the character length of the regex
 		for (i = 1; i <= argv_end; i++){
 			argv_char_count += strlen(argv[i]);
 		}
-		argv_char_count += (argv_end-2) - 2;	//?
+		argv_char_count += (argv_end-1) - 2;	//sum up argv_end because we are not counting the spaces between arguments, 
+												//-1 because there is one less space than arguments
+												// -2 is removing the quotes. 
 		
-		regex = malloc(sizeof(char)*argv_char_count);
+		regex = malloc(sizeof(char)*(argv_char_count+1));
 		check_malloc((void*)regex,__LINE__);
 		
 		regex[0] = '\0';	
@@ -663,25 +697,29 @@ void main(int argc, char * argv[]){
 		return;
 	}
 	
-	if(argc < 3){
-		printf("Enter a file to search for as the 3rd argument.\n");
+	if(argc <= argv_end){
+		printf("Enter a file to search for as an argument after the regex expression.\n");
 		return;
 	}
 	else {
-		search_text_input = fopen(argv[2], "r");	
-		printf("File: %s\n", argv[2]);
+		
+		search_text_input = fopen(argv[argv_end+1], "r");	
 		if (search_text_input == NULL)
 		   {
 			  perror("Error while opening the file.\n");
 			  exit(EXIT_FAILURE);
 		   }
 	}
+	printf("argc %d argv_end+1 %d\n",argc,argv_end+1);
 	
-	if (argc >=4 && atoi(argv[3]) > 0 )
-		window_size = atoi(argv[3]);
+	if (argc > argv_end+2 && atoi(argv[argv_end+2]) > 1 )
+		window_size = atoi(argv[argv_end+2]);
 	
 	if ( check_syntax(regex) == FALSE) return;
-	regex = RemoveExccessBrackets(regex);
+	
+	temp = regex;
+	regex = RemoveExccessBrackets(temp);
+	free(temp);
 	symbols_num = count_symbols(regex);
 	symbols_num2 = count_symbols2(regex) +1; //+1 is for header alphabet symbols
 	
@@ -724,7 +762,7 @@ void main(int argc, char * argv[]){
 		if ( i > 0 )
 			printf("%d\t",i);
 		else
-			printf("\t",i);
+			printf("\t");
 		if (i == 0){
 			for (j = 0; j < symbols_num + 2 ; j++){
 				printf("%c\t",table[0][j] -> state_name);
@@ -750,33 +788,32 @@ void main(int argc, char * argv[]){
 	//print out search results
 	if (output.found == 0)
 		printf("\nNo matches found!");
+	
 	else{
 		previos_line = -1;
-		printf("Output found: %d\n",output.found);
-		
-		//str = malloc(sizeof(char)*100*output.found);
-		//check_malloc((void*)str,__LINE__);
+		printf("Output found: %d\n",(output.found==1)?output.found:output.found-1 );	
+		str2 = malloc(sizeof(char));
 		
 		for(i = 0, j = 0; i < output.found; i++){
 			
 			line = *(output.line_num + i);
 			char_beg = *(output.char_num_begin + i);
 			char_end = *(output.char_num_end + i);
-
+			
 			if (previos_line != *(output.line_num + i)) {
 				if (previos_line > -1){		
-					print_lines(str, str2, len, line-1, window_size);
+					if(PLATFORM_NAME == 0){
+						print_lines(output.line_text[j++], str2, len, line-1, window_size);
+					}
+					else
+						print_lines_linux(output.line_text[j++], str2, len, line-1, window_size);
 				}
 				previos_line = *(output.line_num + i);
 				len = strlen(output.line_text[j]);
 				
-				str = malloc(sizeof(char)*(len+1));
-				check_malloc((void*)str,__LINE__);
-				
-				str2 = malloc(sizeof(char)*(len+1));
+				str2 = realloc(str2,sizeof(char)*(len+1));
 				check_malloc((void*)str2,__LINE__);
 				
-				sprintf(str,"%s",output.line_text[j++]);
 				k = 0;
 			}
 			for (; k < len; k++){
@@ -801,8 +838,13 @@ void main(int argc, char * argv[]){
 			}
 			*(str2+k) = '\0';
 		}
-		print_lines(str, str2, len, line, window_size);
+		
+		if(PLATFORM_NAME == 0)
+			print_lines(output.line_text[j], str2, len, line, window_size);
+		else
+			print_lines_linux(output.line_text[j], str2, len, line, window_size);
 	}
+
 
 	for (i= 0; i < symbols_num2;  i++){
 		for (j = 0; j<symbols_num+2; j++){
@@ -820,7 +862,6 @@ void main(int argc, char * argv[]){
 		free(output.line_num);
 		free(output.char_num_begin);
 		free(output.char_num_end);	
-		free(str);
 		free(str2);		
 	}
 
