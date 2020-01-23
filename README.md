@@ -1,4 +1,4 @@
-# regex
+# regex.c
 
 A small program to find regular expressions within a file. It will convert a regular expression into an e-NFA, which it will use to search the text.
 
@@ -9,3 +9,6 @@ Regular expressions are using the following syntax:
 '+' - OR
 '()' - brackets
 
+# regexWeb.c
+
+web version of the programm that is hosted on http://147.78.65.150/
