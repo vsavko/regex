@@ -11,4 +11,4 @@ Regular expressions are using the following syntax:
 
 # regexWeb.c
 
-web version of the programm that is hosted on http://147.78.65.150/
+Web version of the programm that is hosted on http://147.78.65.150/
