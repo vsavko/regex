@@ -9,6 +9,3 @@ Regular expressions are using the following syntax:
 '+' - OR
 '()' - brackets
 
-# regexWeb.c
-
-Web version of the programm that is hosted on http://147.78.65.150/
